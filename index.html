@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+
+    <style>
+        body {
+            margin: 0;
+        }
+
+        .container {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        table {
+            border-spacing: 0
+        }
+
+        td {
+            background-color: #d6d6d6;
+            width: 10px;
+            height: 10px;
+            border: 1px solid #e5e5e5;
+            padding: 0;
+        }
+
+        td:hover {
+            background-color: red;
+        }
+
+        .block,
+        .ball,
+        .bottom_bar {
+            background-color: black;
+        }
+
+        .ombra {
+            background-color: red;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <table></table>
+    </div>
+
+    <script>
+
+        const game_area = { width: 50, height: 60 }
+        const table = document.querySelector('table')
+
+        const bottom_bar_length = 6
+        let coordinate_bottom_bar = []
+
+        const ball_length = 1
+        let ball_coordinate = []
+        let ball_direction_x = Math.floor(Math.random() * 2)
+        const ball_directions_x = ['left', 'right']
+        let ball_direction_y = 0
+        const ball_directions_y = ['top', 'bottom']
+
+        let game_interval_key
+        let game_speed = 200
+        let play = true
+
+        // single block consideration area = 4x2
+        const max_rows_for_blocks_math = () => Math.floor((game_area.height - 2 - 8) / 2)
+        const max_blocks_row_math = () => {
+            const n_blocks = Math.floor((game_area.width - 2) / 4)
+            return Math.floor((game_area.width - 2 - n_blocks) / 4)
+        }
+        const max_blocks_row = max_blocks_row_math()
+        const max_rows_for_blocks = max_blocks_row_math()
+        let blocks = []
+        let rows_blocks;
+        let redux_rows;
+
+
+        const build_game_area = async (game_area) => {
+            for (let i = 0; i < game_area.height; i++) {
+                const tr = document.createElement('tr')
+
+                for (let j = 0; j < game_area.width; j++) {
+                    const td = document.createElement('td')
+                    tr.append(td)
+                }
+
+                table.append(tr)
+            }
+        }
+
+        const generate_bottom_bar = () => {
+            const bottom_bar_05 = parseInt(bottom_bar_length / 2)
+            const middle_bar_pos = parseInt(game_area.width / 2)
+
+            const start_bar = middle_bar_pos - bottom_bar_05
+
+            const row = table.querySelectorAll('tr')[game_area.height - 1]
+            const cols = row.querySelectorAll('td')
+
+            for (let i = 0; i < bottom_bar_length; i++) {
+                coordinate_bottom_bar.push(start_bar + i)
+                cols[start_bar + i].classList.add('bottom_bar')
+            }
+        }
+
+        const generate_ball = () => {
+
+            const x = Math.floor(game_area.width / 2)
+            const y = game_area.height - 2;
+            ball_coordinate = [x, y]
+
+            const ball_row = table.querySelectorAll('tr')[y]
+            const ball_cells = ball_row.querySelectorAll('td')[x]
+
+            ball_cells.classList.add('ball')
+        }
+
+
+        const build_block = (block) => {
+
+            const rows = table.querySelectorAll('tr')
+
+            block.forEach(el => {
+                const [row, cell] = el.split('_')
+                const cels = rows[row].querySelectorAll('td')[cell].classList.add('block')
+            })
+        }
+
+        const build_blocks = () => {
+
+            const rows = table.querySelectorAll('tr')
+            const level_rows = Math.floor(Math.random() * max_rows_for_blocks + 2)
+
+            const delta_level_rows = (level_rows * 3) + 1
+
+            for (let i = 1; i < delta_level_rows; i += 3) {
+
+                const n_row_blocks = Math.floor(Math.random() * max_blocks_row)
+                const delta_row_blocks = (n_row_blocks * 5) + 1
+                const offset = Math.floor((game_area.width - delta_row_blocks) / 2)
+
+                for (let j = 1; j < delta_row_blocks; j += 5) {
+
+                    const block2 = [
+                        i + "_" + (offset + j),
+                        i + "_" + (offset + j + 1),
+                        i + "_" + (offset + j + 2),
+                        i + "_" + (offset + j + 3),
+                        (i + 1) + "_" + (offset + j),
+                        (i + 1) + "_" + (offset + j + 1),
+                        (i + 1) + "_" + (offset + j + 2),
+                        (i + 1) + "_" + (offset + j + 3),
+                    ]
+
+                    blocks.push(block2)
+                    build_block(block2)
+                }
+            }
+        }
+
+        // Ball Moviments
+        const bar_moviment_right = (coordinate_bar) => {
+
+            if (game_area.width > (coordinate_bar[coordinate_bar.length - 1] + 1)) {
+
+                const next = coordinate_bar[coordinate_bar.length - 1] + 1
+                const tail = coordinate_bar.shift()
+                coordinate_bar.push(next)
+
+                return { next, tail }
+            }
+
+            return { next: false, tail: false }
+        }
+
+        const bar_moviment_left = (coordinate_bar) => {
+
+            if ((coordinate_bar[0] - 1) >= 0) {
+
+                const next = coordinate_bar[0] - 1
+                const tail = coordinate_bar.pop()
+                coordinate_bar.splice(0, 0, next)
+
+                return { next, tail }
+            }
+
+            return { next: false, tail: false }
+        }
+
+        addEventListener("keydown", (event) => {
+
+            const bottom_bar_row = table.querySelectorAll('tr')[game_area.height - 1]
+            const bottom_bar_cells = bottom_bar_row.querySelectorAll('td')
+
+            let step = false
+
+            switch (event.key) {
+                case 'ArrowRight':
+
+                    step = bar_moviment_right(coordinate_bottom_bar)
+
+                    break;
+                case 'ArrowLeft':
+
+                    step = bar_moviment_left(coordinate_bottom_bar)
+
+                    break;
+                case 'Escape':
+                    play = !play
+                    break;
+            }
+
+            // next cell
+            if (false !== step.next) {
+                const next_cell = bottom_bar_cells[step.next]
+                next_cell?.classList.add('bottom_bar')
+            }
+
+            // remove tail
+            if (false !== step.tail) {
+                const tail_cell = bottom_bar_cells[step.tail]
+                tail_cell?.classList.remove('bottom_bar')
+            }
+        })
+
+
+        const collision_ball_bottom_bar = (x, y) => {
+
+            if (y === (game_area.height - 2) && coordinate_bottom_bar.includes(x)) {
+                return true
+            }
+
+            return false
+        }
+
+
+        const remove_block = (id_collided_block, rows) => {
+
+            const block = blocks[id_collided_block]
+
+            block.forEach(async item => {
+
+                const [x, y] = item.split('_')
+                const td = rows[x].querySelectorAll('td')[y]
+
+                td.classList.remove('block')
+            })
+
+            delete blocks[id_collided_block]
+
+            blocks = blocks.filter(x => x)
+            redux_rows = blocks.reduce((prev, next) => prev.concat(next))
+        }
+
+
+        const block_collision_ball = (rows, x, y) => {
+
+            const row_top_y = y - 1
+            const row_bottom_y = y
+
+            const next_x = 'left' === ball_directions_x[ball_direction_x] ? x - 1 : x + 1
+
+            if ('top' === ball_directions_y[ball_direction_y] && redux_rows.includes(row_top_y + '_' + next_x)) {
+
+                const id_collided_block = blocks.reduce((acc, item, i) => {
+                    if (item.includes(row_top_y + '_' + next_x)) {
+                        acc.push(i);
+                    }
+                    return acc;
+                }, []);
+
+                remove_block(id_collided_block, rows)
+                ball_direction_y = (ball_direction_y > 0 ? 0 : 1)
+
+                return true
+
+            } else if ('bottom' === ball_directions_y[ball_direction_y] && redux_rows.includes(row_bottom_y + '_' + next_x)) {
+
+                const id_collided_block = blocks.reduce((acc, item, i) => {
+                    if (item.includes(row_bottom_y + '_' + next_x)) {
+                        acc.push(i);
+                    }
+                    return acc;
+                }, []);
+
+                remove_block(id_collided_block, rows)
+                ball_direction_y = (ball_direction_y > 0 ? 0 : 1)
+
+                return true
+            }
+
+            return false
+        }
+
+        const ball_game_area_collision = (rows) => {
+
+            // const x = ball_coordinate[0] + 1 // right
+            // const x = ball_coordinate[0] - 1 // left
+            const x = (
+                'right' === ball_directions_x[ball_direction_x]
+                    ? ball_coordinate[0] + 1
+                    : ball_coordinate[0] - 1
+            )
+            // const y = ball_coordinate[1] + 1 // top
+            // const y = ball_coordinate[1] - 1 // bottom
+            const y = (
+                'top' === ball_directions_y[ball_direction_y]
+                    ? ball_coordinate[1] - 1
+                    : ball_coordinate[1] + 1
+            )
+
+            if (x > (game_area.width - 2) || x === 0) {
+                ball_direction_x = (ball_direction_x > 0 ? 0 : 1)
+            }
+
+            if (y === 0 || collision_ball_bottom_bar(x, y)) {
+                ball_direction_y = (ball_direction_y > 0 ? 0 : 1)
+            }
+
+            if (y === game_area.height) {
+                // GAME OVER (are you lose)
+                play != play
+            } else {
+
+                block_collision_ball(rows, x, y)
+
+                // const old_ombre = document.querySelectorAll('.ombra')
+                // old_ombre.length ? old_ombre.forEach(item => item.classList.remove('ombra')) : 0
+
+                const old_ball_cells = rows[ball_coordinate[1]].querySelectorAll('td')[ball_coordinate[0]]
+                old_ball_cells.classList.remove('ball')
+
+                const ball_cells = rows[y].querySelectorAll('td')[x]
+                ball_cells.classList.add('ball')
+
+                ball_coordinate = [x, y]
+            }
+        }
+
+        const ball_moviment = () => {
+
+            if (play) {
+
+                const rows = table.querySelectorAll('tr')
+
+                ball_game_area_collision(rows)
+            }
+        }
+
+        build_game_area(game_area);
+        generate_bottom_bar()
+
+        generate_ball()
+        build_blocks()
+
+        redux_rows = blocks.reduce((prev, next) => prev.concat(next))
+
+
+        game_interval_key = setInterval(ball_moviment, game_speed);
+
+    </script>
+</body>
+
+</html>
